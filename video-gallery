@@ -203,7 +203,11 @@ customElements.define('video-gallery', VideoGallery);
           assign init_video_url = block.settings.video_url
           assign init_video_id = block.settings.video_url.id
         endif
-        assign init_video_poster = block.settings.video_poster
+        if section.settings.poster
+          assign init_video_poster = section.settings.poster
+        else
+          assign init_video_poster = block.settings.video_poster
+        endif
         assign init_video_title = block.settings.video_title
         break
       endfor 
@@ -476,6 +480,12 @@ customElements.define('video-gallery', VideoGallery);
       "type": "text",
       "id": "caption",
       "label": "Caption"
+    },
+    {
+      "type": "image_picker",
+      "id": "poster",
+      "label": "Poster",
+      "info": "Alternate poster to first item thumbnail"
     },
     {
       "type": "range",
