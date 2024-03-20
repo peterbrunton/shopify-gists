@@ -179,6 +179,16 @@ customElements.define('video-gallery', VideoGallery);
 {{ 'video-section.css' | asset_url | stylesheet_tag }}
 {{ 'component-deferred-media.css' | asset_url | stylesheet_tag }}
 
+{%- capture init_video_poster_sizes -%}
+  (min-width: {{ settings.page_width }}px) {{ settings.page_width | minus: 100 }}px, (min-width: 750px)
+  calc(100vw - 10rem), 100vw
+{%- endcapture -%}
+
+{%- capture thumbnail_sizes -%}  
+  (min-width: {{ settings.page_width }}px) calc({{ settings.page_width | minus: 100 }}px / 3), (min-width: 750px)
+  calc(100vw - 10rem / 3), calc(100vw / 2)
+{%- endcapture -%}
+
 <video-gallery class="video-gallery section-{{ section.id }} section-{{ section.id }}-padding page-width">
   
   {%- if section.settings.title != blank or section.settings.caption != blank -%} 
@@ -195,6 +205,9 @@ customElements.define('video-gallery', VideoGallery);
   <div class="video-gallery__inner">
     
     {% liquid
+
+      assign widths = '375, 550, 750, 1100, 1500, 1780, 2000, 3000, 3840'
+      
       for block in section.blocks
         if block.type == 'video'
           assign init_video = block.settings.video
@@ -205,12 +218,20 @@ customElements.define('video-gallery', VideoGallery);
         endif
         if section.settings.poster
           assign init_video_poster = section.settings.poster
+          assign init_video_poster_alt = section.settings.poster.alt
         else
           assign init_video_poster = block.settings.video_poster
+          assign init_video_poster_alt = block.settings.video_poster.alt
         endif
         assign init_video_title = block.settings.video_title
         break
-      endfor 
+      endfor
+    
+      assign fetch_priority = 'auto'
+      if section.index == 1
+        assign fetch_priority = 'high'
+      endif
+    
     %}
     
     <div class="video-gallery__active-video-content">
@@ -233,8 +254,17 @@ customElements.define('video-gallery', VideoGallery);
               {{
                 init_video_poster
                 | image_url: width: 3840
-                | image_tag: sizes: sizes, widths: '375, 750, 1100, 1500, 1780, 2000, 3000, 3840', alt: alt
+                | image_tag: 
+                  width: init_video_poster.width,
+                  height: init_video_poster.height,
+                  class: 'video-gallery__poster-image',
+                  sizes: init_video_poster_sizes, 
+                  widths: widths, 
+                  alt: init_video_poster_alt,
+                  fetch_priority: fetch_priority
               }}
+            {%- else -%}
+              {{ 'hero-apparel-3' | placeholder_svg_tag: 'placeholder-svg placeholder' }}
             {%- endif -%}
           </a>
         {%- else -%}
@@ -262,7 +292,14 @@ customElements.define('video-gallery', VideoGallery);
           {{
             init_video_poster
             | image_url: width: 3840
-            | image_tag: sizes: sizes, widths: '375, 750, 1100, 1500, 1780, 2000, 3000, 3840', alt: alt
+            | image_tag: 
+              width: init_video_poster.width,
+              height: init_video_poster.height,
+              class: 'video-gallery__poster-image',
+              sizes: init_video_poster_sizes, 
+              widths: widths, 
+              alt: init_video_poster_alt,
+              fetch_priority: fetch_priority
           }}
         {%- else -%}
           {{ 'hero-apparel-3' | placeholder_svg_tag: 'placeholder-svg placeholder' }}
@@ -325,12 +362,24 @@ customElements.define('video-gallery', VideoGallery);
         %}
         
       <div class="video-gallery__thumbnail" {% if block.type == 'video' %}data-video-url="{{ video_url }}" {% else %} data-embed-url="{{ block.settings.video_url }}"{% endif %} data-poster-path="{{ block.settings.video_poster }}" data-video-title="{{ block.settings.video_title }}">
-                
-        {{ block.settings.video_poster | image_url: width: 1000 | image_tag: sizes: '(min-width: 750px) calc(var(--page-width) / 3), calc(var(--page-width) / 2)', class: 'video-gallery__thumbnail__image', alt: block.settings.video_poster.alt }}
+        {%- if block.settings.video_poster != null -%}
+          {{ 
+            block.settings.video_poster 
+            | image_url: width: 1000 
+            | image_tag: 
+              width: block.settings.video_poster.width,
+              height: block.settings.video_poster.height,
+              sizes: thumbnail_sizes, 
+              widths: widths, 
+              class: 'video-gallery__thumbnail__image', 
+              alt: block.settings.video_poster.alt,
+              fetch_priority: fetch_priority
+          }}
+        {%- endif -%}
 
-        {% if block.settings.video_title %}
+        {%- if block.settings.video_title -%}
         <h3 class="video-gallery__thumbnail__title center">{{ block.settings.video_title | escape }}</h3>
-        {% endif %}
+        {%- endif -%}
       </div>
       {%- endfor -%}
     </div>
