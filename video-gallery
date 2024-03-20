@@ -1,0 +1,566 @@
+{% javascript %}
+
+class VideoGallery extends HTMLElement {
+  constructor() {
+    super();
+    this.deferredMedia = this.querySelector(".video-gallery__media");
+    this.videoPlaylist = this.querySelector(".video-gallery__thumbnails");
+    this.activeVideoTitle = this.querySelector(".video-gallery__active-video-title");
+
+    this.handleVideoClick = this.handleVideoClick.bind(this);
+    this.videoPlayer = null;
+  }
+
+  connectedCallback() {
+    this.videoPlaylist.addEventListener("click", this.handleVideoClick);
+  }
+
+  getVideoEmbedRef = () => {
+    return document.querySelector('.video-gallery__embed');
+  }
+
+  getVideoPlayerRef = () => {
+    return document.querySelector('.video-gallery__player');
+  }
+
+  clearExistingMedia = () => {
+    const existingEmbed = this.getVideoEmbedRef();
+    const existingPlayer = this.getVideoPlayerRef();
+
+    if (existingEmbed) {
+      existingEmbed.remove();
+    }
+
+    if (existingPlayer) {
+      existingPlayer.classList.remove("hidden");
+    }
+  }
+
+  handleVideoClick = (e) => {
+
+    const thumbnailElement = event.target.closest(".video-gallery__thumbnail");
+    if (!thumbnailElement) return;
+
+    if (this.deferredMedia) {
+      this.deferredMedia.loadContent(false);
+    }
+
+    const videoURL = thumbnailElement.dataset.videoUrl;
+    const embedURL = thumbnailElement.dataset.embedUrl;
+    const videoTitle = thumbnailElement.dataset.videoTitle;
+
+    if (videoURL) {
+        // Load video
+        this.loadVideo(videoURL, videoTitle);
+    } else if (embedURL) {
+        // Load embed
+        this.loadEmbed(embedURL, videoTitle);
+    } else {
+        console.error('Video URL or embed URL not found');
+    }
+
+    this.scrollToVideoPlayer(); 
+  }
+
+  // Function to scroll to the video player
+  scrollToVideoPlayer = () => {
+    if (!this.videoPlayer) {
+      console.error('Video player element not found');
+      return;
+    }
+
+    const videoPlayerPosition = this.videoPlayer.getBoundingClientRect().top + window.scrollY - 150;
+
+    window.scrollTo({
+      top: videoPlayerPosition,
+      behavior: 'smooth'
+    });
+  }
+
+  loadVideo = (videoURL, videoTitle) => {
+
+    this.clearExistingMedia();
+
+    // Get the video player
+    this.videoPlayer = this.getVideoPlayerRef();
+
+    if (!this.videoPlayer) {
+      console.error('Video player element not found');
+      return;
+    }
+    
+    // Set video source and title
+    this.videoPlayer.src = videoURL;
+    this.videoPlayer.load();
+
+    // Play the video
+    this.videoPlayer.addEventListener('loadedmetadata', function loadedMetadataHandler() {
+      this.videoPlayer.play()
+        .then(() => {
+          console.log('Video started playing');
+          // Remove the event listener after playback starts
+          this.videoPlayer.removeEventListener('loadedmetadata', loadedMetadataHandler);
+        })
+        .catch((error) => {
+          console.error('Error playing video:', error);
+        });
+    }.bind(this));
+
+    // Update the active video title
+    this.activeVideoTitle.innerText = videoTitle;
+  }
+
+  loadEmbed = (embedURL, videoTitle) => {
+
+    this.clearExistingMedia();
+
+    const embedProviders = {
+      "youtube.com": (url) => {
+        const videoId = this.getYouTubeVideoId(url);
+        return `https://www.youtube.com/embed/${videoId}?autoplay=1`;
+      },
+      "youtu.be": (url) => {
+        const videoId = this.getYouTubeVideoId(url); // Reuse the existing function
+        return `https://www.youtube.com/embed/${videoId}?autoplay=1`;
+      },
+      "vimeo.com": (url) => {
+        const videoId = this.getVimeoVideoId(url);
+        return `https://player.vimeo.com/video/${videoId}?autoplay=1`;
+      },
+    };
+
+    // Create new embed element
+    let embedElement;
+
+    const domain = new URL(embedURL).hostname;
+    // Check if provider is supported in the lookup table
+    if (embedProviders.hasOwnProperty(domain)) {
+      const embedUrlConstructor = embedProviders[domain];
+      embedElement = document.createElement('iframe');
+      embedElement.src = embedUrlConstructor(embedURL);
+    } else {
+      console.error('Unsupported embed URL:', embedURL);
+      return;
+    }
+
+    // Add necessary attributes to the embed element
+    embedElement.classList.add("video-gallery__embed");
+    embedElement.setAttribute('allow', 'autoplay; encrypted-media');
+    embedElement.setAttribute('allowfullscreen', '');
+    embedElement.setAttribute('title', videoTitle);
+
+    // Insert the embed element into the DOM
+    this.deferredMedia.appendChild(embedElement);
+
+    // Update the reference to the new embed element
+    this.videoPlayer = embedElement;
+
+    // Update the active video title
+    this.activeVideoTitle.innerText = videoTitle;
+  }
+
+  getYouTubeVideoId = (embedURL) => {
+    const regex = /(?:youtube\.com\/(?:[^/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?/ ]{11})/;
+    const match = embedURL.match(regex);
+    return match ? match[1] : null;
+  }
+
+  getVimeoVideoId = (embedURL) => {
+    const regex = /vimeo\.com\/(?:video\/|(\d+))/;
+    const match = embedURL.match(regex);
+    return match ? match[1] : null;
+  }
+}
+
+customElements.define('video-gallery', VideoGallery);
+
+{% endjavascript %}
+
+{{ 'video-section.css' | asset_url | stylesheet_tag }}
+{{ 'component-deferred-media.css' | asset_url | stylesheet_tag }}
+
+<video-gallery class="video-gallery section-{{ section.id }} section-{{ section.id }}-padding page-width">
+  
+  {%- if section.settings.title != blank or section.settings.caption != blank -%} 
+    <div class="video-gallery__content center">
+    {%- if section.settings.title != blank -%}
+      <h2 class="video-gallery__title {{ section.settings.heading_size }}">{{ section.settings.title | escape }}</h2>
+    {%- endif -%}
+    {%- if section.settings.caption != blank -%}
+      <h3 class="video-gallery__caption sans">{{ section.settings.caption | escape }}</h3>
+    {%- endif -%}
+    </div>
+  {%- endif -%}
+  
+  <div class="video-gallery__inner">
+    
+    {% liquid
+      for block in section.blocks
+        if block.type == 'video'
+          assign init_video = block.settings.video
+          assign init_video_id = block.settings.video.id
+        else
+          assign init_video_url = block.settings.video_url
+          assign init_video_id = block.settings.video_url.id
+        endif
+        assign init_video_poster = block.settings.video_poster
+        assign init_video_title = block.settings.video_title
+        break
+      endfor 
+    %}
+    
+    <div class="video-gallery__active-video-content">
+      <h2 class="video-gallery__active-video-title h3 center sans">{{ init_video_title }}</h2>
+    </div>
+
+    <noscript>
+      <div
+        class="video-gallery__media video-section__media"
+        {% if init_video_poster != null %}
+          style="--ratio-percent: {{ 1 | divided_by: init_video.aspect_ratio | times: 100 }}%;"
+        {% endif %}
+      >
+        {%- if init_video == null and init_video_url != null -%}
+          <a
+            href="{{ init_video_url }}"
+            class="video-gallery__poster video-section__poster media media--transparent{% if init_video_poster == null %} video-section__placeholder{% endif %}"
+          >
+            {%- if init_video_poster != null -%}
+              {{
+                init_video_poster
+                | image_url: width: 3840
+                | image_tag: sizes: sizes, widths: '375, 750, 1100, 1500, 1780, 2000, 3000, 3840', alt: alt
+              }}
+            {%- endif -%}
+          </a>
+        {%- else -%}
+          {{
+            init_video
+            | video_tag: image_size: '1100x', controls: true, muted: false
+          }}
+        {%- endif -%}
+      </div>
+    </noscript>
+    <deferred-media
+      class="video-gallery__media video-section__media deferred-media no-js-hidden gradient global-media-settings{% if section.settings.full_width %} global-media-settings--full-width{% endif %}{% if fix_ratio %} media-fit-cover{% endif %}{% if settings.animations_reveal_on_scroll %} scroll-trigger animate--slide-in{% endif %}"
+      data-media-id="{{ init_video_id }}"
+      {% if init_video_poster != null %}
+        style="--ratio-percent: {{ 1 | divided_by: init_video.aspect_ratio | times: 100 }}%;"
+      {% endif %}
+    >
+      <button
+        id="Deferred-Poster-Modal-{{ init_video_id }}"
+        class="video-gallery__poster video-section__poster media deferred-media__poster media--landscape"
+        type="button"
+        aria-label="{{ alt }}"
+      >
+        {%- if init_video_poster != null -%}
+          {{
+            init_video_poster
+            | image_url: width: 3840
+            | image_tag: sizes: sizes, widths: '375, 750, 1100, 1500, 1780, 2000, 3000, 3840', alt: alt
+          }}
+        {%- else -%}
+          {{ 'hero-apparel-3' | placeholder_svg_tag: 'placeholder-svg placeholder' }}
+        {%- endif -%}
+        <span class="deferred-media__poster-button motion-reduce">
+          {%- render 'icon-play' -%}
+        </span>
+      </button>
+      <template>
+        {%- if init_video == null and init_video_url != null -%}
+          {%- if section.settings.video_url.type == 'youtube' -%}
+            <iframe
+              src="https://www.youtube.com/embed/{{ init_video_id }}?enablejsapi=1&autoplay=1"
+              class="video-gallery__embed--youtube"
+              allow="autoplay; encrypted-media"
+              allowfullscreen
+              title="{{ section.settings.description | escape }}"
+            ></iframe>
+          {%- else -%}
+            <iframe
+              src="https://player.vimeo.com/video/{{ init_video_id }}?autoplay=1"
+              class="video-gallery__embed video-gallery__embed--vimeo"
+              allow="autoplay; encrypted-media"
+              allowfullscreen
+              title="{{ section.settings.description | escape }}"
+            ></iframe>
+          {%- endif -%}
+        {%- else -%}
+          {{
+            init_video
+            | video_tag:
+              image_size: '1100x',
+              autoplay: true,
+              controls: true,
+              muted: false,
+              class: 'video-gallery__player'
+          }}
+        {%- endif -%}
+      </template>
+    </deferred-media>
+
+    {% if section.settings.video_thumbnails_heading %}
+    <div>
+      <h3 class="video-gallery__thumbnails-heading h2 center">{{ section.settings.video_thumbnails_heading }}</h3>
+    </div>
+    {% endif %}
+    
+    <!-- Thumbnails container -->
+    <div class="video-gallery__thumbnails">
+
+      {%- for block in section.blocks -%}
+        
+        {% liquid
+            assign video = block.settings.video
+            for video_source in video.sources
+              if video_source.format == 'mp4'
+               assign video_url = video_source.url
+              endif 
+            endfor 
+        %}
+        
+      <div class="video-gallery__thumbnail" {% if block.type == 'video' %}data-video-url="{{ video_url }}" {% else %} data-embed-url="{{ block.settings.video_url }}"{% endif %} data-poster-path="{{ block.settings.video_poster }}" data-video-title="{{ block.settings.video_title }}">
+                
+        {{ block.settings.video_poster | image_url: width: 1000 | image_tag: sizes: '(min-width: 750px) calc(var(--page-width) / 3), calc(var(--page-width) / 2)', class: 'video-gallery__thumbnail__image', alt: block.settings.video_poster.alt }}
+
+        {% if block.settings.video_title %}
+        <h3 class="video-gallery__thumbnail__title center">{{ block.settings.video_title | escape }}</h3>
+        {% endif %}
+      </div>
+      {%- endfor -%}
+    </div>
+  
+  </div>
+</video-gallery>
+
+<style>
+
+  .section-{{ section.id }}-padding {
+    padding-top: {{ section.settings.padding_top | times: 0.75 | round: 0 }}vh;
+    padding-bottom: {{ section.settings.padding_bottom | times: 0.75 | round: 0 }}vh;
+  }
+
+  @media screen and (min-width: 750px) {
+    .section-{{ section.id }}-padding {
+      padding-top: {{ section.settings.padding_top }}vh;
+      padding-bottom: {{ section.settings.padding_bottom }}vh;
+    }
+  }
+
+  .video-gallery {
+    display: block;
+  }
+  
+  .video-gallery__inner {
+    width: 100%;
+    margin: 0 auto;
+    padding: 0 20px 20px;
+  }
+
+  .video-gallery__player {
+    max-width: 100%;
+  }
+
+  .video-gallery__wrapper {
+    position: relative;
+    display: inline-block; /* Ensure the wrapper only takes up the necessary space */
+  }
+  
+  .video-gallery__poster {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+  }
+  
+  .video-gallery__poster-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover; /* Ensure the poster image covers the entire area */
+  }
+  
+  .video-gallery__poster-button {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: none;
+    border: none;
+  }
+  
+  .video-gallery__player {
+    width: 100%;
+    height: 100%;
+  }
+
+  .video-gallery__poster-button svg {
+    width: 50px;
+    height: 50px;
+  }
+
+  .video-gallery__player iframe {
+    background-color: #000;
+  }
+
+  .video-gallery__thumbnails {
+    padding: 20px 0;
+    display: grid;
+    gap: 20px;
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  @media only screen and (min-width: 750px) {
+    .video-gallery__thumbnails {
+      grid-template-columns: repeat({{ section.settings.items_per_row }}, 1fr);
+    }
+  }
+  
+  .video-gallery__thumbnail {
+    cursor: pointer;
+    overflow: visible;
+  }
+  
+  .video-gallery__thumbnail__image {
+    width: 100%;
+    height: auto;
+    transition: transform 0.75s;
+    overflow: visible;
+  }
+  
+  .video-gallery__thumbnail:hover .video-gallery__thumbnail__image {
+    transform: scale(1.05);
+  }
+  
+</style>
+
+{% schema %}
+{
+  "name": "Video Gallery",
+  "settings": [
+    {
+      "type": "text",
+      "id": "title",
+      "label": "t:sections.featured-collection.settings.title.label"
+    },
+    {
+      "type": "select",
+      "id": "heading_size",
+      "options": [
+        {
+          "value": "h2",
+          "label": "t:sections.all.heading_size.options__1.label"
+        },
+        {
+          "value": "h1",
+          "label": "t:sections.all.heading_size.options__2.label"
+        },
+        {
+          "value": "h0",
+          "label": "t:sections.all.heading_size.options__3.label"
+        },
+        {
+          "value": "hxl",
+          "label": "t:sections.all.heading_size.options__4.label"
+        },
+        {
+          "value": "hxxl",
+          "label": "t:sections.all.heading_size.options__5.label"
+        }
+      ],
+      "default": "h1",
+      "label": "t:sections.all.heading_size.label"
+    },
+    {
+      "type": "text",
+      "id": "caption",
+      "label": "Caption"
+    },
+    {
+      "type": "range",
+      "id": "items_per_row",
+      "label": "Items per Row",
+      "min": 1,
+      "max": 6,
+      "default": 3
+    },   
+    {
+      "type": "text",
+      "id": "video_thumbnails_heading",
+      "label": "Video thumbnails heading"
+    },
+    {
+      "type": "range",
+      "id": "padding_top",
+      "min": 0,
+      "max": 10,
+      "step": 1,
+      "unit": "vh",
+      "label": "t:sections.all.padding.padding_top",
+      "default": 5
+    },
+    {
+      "type": "range",
+      "id": "padding_bottom",
+      "min": 0,
+      "max": 10,
+      "step": 1,
+      "unit": "vh",
+      "label": "t:sections.all.padding.padding_bottom",
+      "default": 5
+    }
+  ],
+  "blocks": [
+    {
+      "type": "video",
+      "name": "Video",
+      "limit": 15,
+      "settings": [
+        {
+          "type": "video",
+          "id": "video",
+          "label": "Video"
+        },
+        {
+          "type": "image_picker",
+          "id": "video_poster",
+          "label": "Video poster"
+        },        
+        {
+          "type": "text",
+          "id": "video_title",
+          "label": "Video Title"
+        }
+      ]
+    },
+    {
+      "type": "video_url",
+      "name": "Embedded Video",
+      "limit": 15,
+      "settings": [
+        {
+          "type": "text",
+          "id": "video_url",
+          "label": "Video URL (YouTube or Vimeo)"
+        },
+        {
+          "type": "image_picker",
+          "id": "video_poster",
+          "label": "Video poster"
+        },
+        {
+          "type": "text",
+          "id": "video_title",
+          "label": "Video Title"
+        }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "Video Gallery"
+    }
+  ]
+}
+{% endschema %}
