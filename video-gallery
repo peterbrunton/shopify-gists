@@ -6,13 +6,17 @@ class VideoGallery extends HTMLElement {
     this.deferredMedia = this.querySelector(".video-gallery__media");
     this.videoPlaylist = this.querySelector(".video-gallery__thumbnails");
     this.activeVideoTitle = this.querySelector(".video-gallery__active-video-title");
+    this.videoPlayer = null;
 
     this.handleVideoClick = this.handleVideoClick.bind(this);
-    this.videoPlayer = null;
   }
 
   connectedCallback() {
     this.videoPlaylist.addEventListener("click", this.handleVideoClick);
+  }
+
+  disconnectedCallback() {
+    this.videoPlaylist.removeEventListener("click", this.handleVideoClick);
   }
 
   getVideoEmbedRef = () => {
@@ -23,38 +27,43 @@ class VideoGallery extends HTMLElement {
     return document.querySelector('.video-gallery__player');
   }
 
-  clearExistingMedia = () => {
+  clearExistingMedia = (type) => {
+    
     const existingEmbed = this.getVideoEmbedRef();
     const existingPlayer = this.getVideoPlayerRef();
 
-    if (existingEmbed) {
+    if (type === 'video' && existingEmbed) {
       existingEmbed.remove();
     }
 
-    if (existingPlayer) {
-      existingPlayer.classList.remove("hidden");
+    if (type === 'embed' && existingPlayer) {
+      existingPlayer.remove();
     }
   }
 
   handleVideoClick = (e) => {
 
     const thumbnailElement = event.target.closest(".video-gallery__thumbnail");
-    if (!thumbnailElement) return;
-
+    if (!thumbnailElement) {
+      console.error('Thumbnail element not found');
+      return;
+    }
+    
     if (this.deferredMedia) {
       this.deferredMedia.loadContent(false);
     }
 
     const videoURL = thumbnailElement.dataset.videoUrl;
-    const embedURL = thumbnailElement.dataset.embedUrl;
+    const embedType = thumbnailElement.dataset.embedUrlType;
+    const embedID = thumbnailElement.dataset.embedUrlId;
     const videoTitle = thumbnailElement.dataset.videoTitle;
-
+    
     if (videoURL) {
         // Load video
         this.loadVideo(videoURL, videoTitle);
-    } else if (embedURL) {
+    } else if (embedType && embedID) {
         // Load embed
-        this.loadEmbed(embedURL, videoTitle);
+        this.loadEmbed(embedType, embedID, videoTitle);
     } else {
         console.error('Video URL or embed URL not found');
     }
@@ -79,14 +88,20 @@ class VideoGallery extends HTMLElement {
 
   loadVideo = (videoURL, videoTitle) => {
 
-    this.clearExistingMedia();
+    this.clearExistingMedia('video');
 
     // Get the video player
     this.videoPlayer = this.getVideoPlayerRef();
 
     if (!this.videoPlayer) {
-      console.error('Video player element not found');
-      return;
+      console.log('Video player element not found, creating it');
+      this.videoPlayer = document.createElement('video');
+      this.videoPlayer.classList.add('video-gallery__player');
+      this.videoPlayer.setAttribute('playsinline', '');
+      this.videoPlayer.setAttribute('autoplay', '');
+      this.videoPlayer.setAttribute('controls', '');
+
+      this.deferredMedia.appendChild(this.videoPlayer);
     }
     
     // Set video source and title
@@ -110,66 +125,35 @@ class VideoGallery extends HTMLElement {
     this.activeVideoTitle.innerText = videoTitle;
   }
 
-  loadEmbed = (embedURL, videoTitle) => {
+  loadEmbed = (embedType, embedID, videoTitle) => {
 
-    this.clearExistingMedia();
-
-    const embedProviders = {
-      "youtube.com": (url) => {
-        const videoId = this.getYouTubeVideoId(url);
-        return `https://www.youtube.com/embed/${videoId}?autoplay=1`;
-      },
-      "youtu.be": (url) => {
-        const videoId = this.getYouTubeVideoId(url); // Reuse the existing function
-        return `https://www.youtube.com/embed/${videoId}?autoplay=1`;
-      },
-      "vimeo.com": (url) => {
-        const videoId = this.getVimeoVideoId(url);
-        return `https://player.vimeo.com/video/${videoId}?autoplay=1`;
-      },
-    };
-
-    // Create new embed element
-    let embedElement;
-
-    const domain = new URL(embedURL).hostname;
-    // Check if provider is supported in the lookup table
-    if (embedProviders.hasOwnProperty(domain)) {
-      const embedUrlConstructor = embedProviders[domain];
-      embedElement = document.createElement('iframe');
-      embedElement.src = embedUrlConstructor(embedURL);
-    } else {
-      console.error('Unsupported embed URL:', embedURL);
+    if (embedType !== 'youtube' && embedType !== 'vimeo') {
+      console.error('Invalid embed type');
       return;
     }
 
-    // Add necessary attributes to the embed element
-    embedElement.classList.add("video-gallery__embed");
-    embedElement.setAttribute('allow', 'autoplay; encrypted-media');
-    embedElement.setAttribute('allowfullscreen', '');
+    this.clearExistingMedia('embed');
+
+    const embedURL = (embedType == 'youtube') ? `https://www.youtube.com/embed/${embedID}?autoplay=1`: `https://player.vimeo.com/video/${videoId}?autoplay=1`;
+
+    let embedElement = this.getVideoEmbedRef();
+
+    if (!embedElement) {
+      embedElement = document.createElement('iframe');
+      embedElement.classList.add('video-gallery__embed');
+      embedElement.setAttribute('allow', 'autoplay; encrypted-media');
+      embedElement.setAttribute('allowfullscreen', '');
+      this.deferredMedia.appendChild(embedElement);
+    }
+    
+    embedElement.src = embedURL;
     embedElement.setAttribute('title', videoTitle);
 
-    // Insert the embed element into the DOM
-    this.deferredMedia.appendChild(embedElement);
-
-    // Update the reference to the new embed element
     this.videoPlayer = embedElement;
 
-    // Update the active video title
     this.activeVideoTitle.innerText = videoTitle;
   }
 
-  getYouTubeVideoId = (embedURL) => {
-    const regex = /(?:youtube\.com\/(?:[^/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?/ ]{11})/;
-    const match = embedURL.match(regex);
-    return match ? match[1] : null;
-  }
-
-  getVimeoVideoId = (embedURL) => {
-    const regex = /vimeo\.com\/(?:video\/|(\d+))/;
-    const match = embedURL.match(regex);
-    return match ? match[1] : null;
-  }
 }
 
 customElements.define('video-gallery', VideoGallery);
@@ -211,9 +195,9 @@ customElements.define('video-gallery', VideoGallery);
       for block in section.blocks
         if block.type == 'video'
           assign init_video = block.settings.video
-          assign init_video_id = block.settings.video.id
         else
           assign init_video_url = block.settings.video_url
+          assign init_video_type = block.settings.video_url.type
           assign init_video_id = block.settings.video_url.id
         endif
         if section.settings.poster
@@ -231,6 +215,16 @@ customElements.define('video-gallery', VideoGallery);
       if section.index == 1
         assign fetch_priority = 'high'
       endif
+
+      if init_video_poster != null
+        assign aspect_ratio = 1 | divided_by: init_video_poster.aspect_ratio | times: 100
+      else
+        if init_video != null
+          assign aspect_ratio =  1 | divided_by: init_video.aspect_ratio | times: 100
+        else
+          assign aspect_ratio = 56.25
+        endif
+      endif 
     
     %}
     
@@ -241,9 +235,7 @@ customElements.define('video-gallery', VideoGallery);
     <noscript>
       <div
         class="video-gallery__media video-section__media"
-        {% if init_video_poster != null %}
-          style="--ratio-percent: {{ 1 | divided_by: init_video.aspect_ratio | times: 100 }}%;"
-        {% endif %}
+        style="--ratio-percent: {{ aspect_ratio }}%"
       >
         {%- if init_video == null and init_video_url != null -%}
           <a
@@ -278,15 +270,22 @@ customElements.define('video-gallery', VideoGallery);
     <deferred-media
       class="video-gallery__media video-section__media deferred-media no-js-hidden gradient global-media-settings{% if section.settings.full_width %} global-media-settings--full-width{% endif %}{% if fix_ratio %} media-fit-cover{% endif %}{% if settings.animations_reveal_on_scroll %} scroll-trigger animate--slide-in{% endif %}"
       data-media-id="{{ init_video_id }}"
+      style="--ratio-percent: {{ aspect_ratio }}%"
       {% if init_video_poster != null %}
-        style="--ratio-percent: {{ 1 | divided_by: init_video.aspect_ratio | times: 100 }}%;"
+        style="--ratio-percent: {{ 1 | divided_by: init_video_poster.aspect_ratio | times: 100 }}%"
+      {% else %}
+        {% if init_video != null %}
+          style="--ratio-percent: {{ 1 | divided_by: init_video.aspect_ratio | times: 100 }}%"
+        {% else %}
+          style="--ratio-percent: 56.25%"
+        {% endif %}
       {% endif %}
     >
       <button
         id="Deferred-Poster-Modal-{{ init_video_id }}"
         class="video-gallery__poster video-section__poster media deferred-media__poster media--landscape"
         type="button"
-        aria-label="{{ alt }}"
+        aria-label="{{ init_video_poster_alt }}"
       >
         {%- if init_video_poster != null -%}
           {{
@@ -309,11 +308,11 @@ customElements.define('video-gallery', VideoGallery);
         </span>
       </button>
       <template>
-        {%- if init_video == null and init_video_url != null -%}
-          {%- if section.settings.video_url.type == 'youtube' -%}
+        {%- if init_video == null and init_video_id != null -%}
+          {%- if init_video_type == 'youtube' -%}
             <iframe
               src="https://www.youtube.com/embed/{{ init_video_id }}?enablejsapi=1&autoplay=1"
-              class="video-gallery__embed--youtube"
+              class="video-gallery__embed"
               allow="autoplay; encrypted-media"
               allowfullscreen
               title="{{ section.settings.description | escape }}"
@@ -321,7 +320,7 @@ customElements.define('video-gallery', VideoGallery);
           {%- else -%}
             <iframe
               src="https://player.vimeo.com/video/{{ init_video_id }}?autoplay=1"
-              class="video-gallery__embed video-gallery__embed--vimeo"
+              class="video-gallery__embed"
               allow="autoplay; encrypted-media"
               allowfullscreen
               title="{{ section.settings.description | escape }}"
@@ -361,7 +360,7 @@ customElements.define('video-gallery', VideoGallery);
             endfor 
         %}
         
-      <div class="video-gallery__thumbnail" {% if block.type == 'video' %}data-video-url="{{ video_url }}" {% else %} data-embed-url="{{ block.settings.video_url }}"{% endif %} data-poster-path="{{ block.settings.video_poster }}" data-video-title="{{ block.settings.video_title }}">
+      <div class="video-gallery__thumbnail" {% if block.type == 'video' %}data-video-url="{{ video_url }}" {% else %} data-embed-url-type="{{ block.settings.video_url.type }}" data-embed-url-id="{{ block.settings.video_url.id }}"{% endif %} data-poster-path="{{ block.settings.video_poster }}" data-video-title="{{ block.settings.video_title }}">
         {%- if block.settings.video_poster != null -%}
           {{ 
             block.settings.video_poster 
@@ -375,6 +374,8 @@ customElements.define('video-gallery', VideoGallery);
               alt: block.settings.video_poster.alt,
               fetch_priority: fetch_priority
           }}
+        {%- else -%}
+          {{ 'hero-apparel-3' | placeholder_svg_tag: 'placeholder-svg placeholder' }}
         {%- endif -%}
 
         {%- if block.settings.video_title -%}
@@ -599,9 +600,12 @@ customElements.define('video-gallery', VideoGallery);
       "limit": 15,
       "settings": [
         {
-          "type": "text",
+          "type": "video_url",
           "id": "video_url",
-          "label": "Video URL (YouTube or Vimeo)"
+          "accept": ["youtube", "vimeo"],
+          "default": "https://www.youtube.com/watch?v=_9VUPq3SxOc",
+          "label": "t:sections.video.settings.video_url.label",
+          "info": "t:sections.video.settings.video_url.info"
         },
         {
           "type": "image_picker",
