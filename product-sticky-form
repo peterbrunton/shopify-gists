@@ -1,0 +1,229 @@
+In sections/main-product
+
+add section settings above the padding settings
+
+```
+    {
+      "type": "checkbox",
+      "id": "enable_sticky_cart_button",
+      "label": "Show sticky add to cart button to the bottom of the page",
+      "default": true
+    },
+```
+
+and add snippet render under closing div of section content
+
+```
+    {%- if section.settings.enable_sticky_product_form -%}
+      {% render 'product-sticky-form', product: product %}
+    {%- endif -%}
+```
+
+Create snippets/product-sticky-form
+
+```
+{% comment %}
+  Renders a sticky product form.
+
+  Accepts:
+  - product: {Object} Product object
+
+  Usage:
+
+{% endcomment %}
+
+<script>
+
+  class StickyProductForm extends HTMLElement {
+    constructor() {
+      super();
+    }
+
+    connectedCallback() {
+      this.productForm = document.querySelector('.product-form');
+      this.stickyProductForm = document.querySelector('.sticky-product-form');
+      this.productFormBounds = {};
+  
+      this.onScrollHandler = this.onScroll.bind(this);
+      window.addEventListener('scroll', this.onScrollHandler, false);
+  
+      this.createObserver();
+    }
+
+    disconnectedCallback() {
+      window.removeEventListener('scroll', this.onScrollHandler);
+    }
+
+    createObserver() {
+      try {
+        const observer = new IntersectionObserver((entries, observer) => {
+          if (entries.length > 0) {
+            this.productFormBounds = entries[0].isIntersecting;
+          }
+        }, { threshold: 0.5 });
+        observer.observe(this.productForm);
+      } catch (error) {
+        console.error('Intersection Observer error:', error);
+      }
+    }
+
+    onScroll() {
+      this.productFormBounds ? requestAnimationFrame(this.hide.bind(this)) : requestAnimationFrame(this.reveal.bind(this));
+    }
+
+    hide() {
+      if (this.stickyProductForm.classList.contains('sticky-product-form--active')) {
+        this.stickyProductForm.classList.remove('sticky-product-form--active');
+        this.stickyProductForm.classList.add('sticky-product-form--inactive');
+      }
+    }
+  
+    reveal() {
+      if (this.stickyProductForm.classList.contains('sticky-product-form--inactive')) {
+        this.stickyProductForm.classList.add('sticky-product-form--active');
+        this.stickyProductForm.classList.remove('sticky-product-form--inactive');
+      }
+    }
+  }
+
+  customElements.define('sticky-product-form', StickyProductForm);
+  
+</script>
+
+<style>
+  .sticky-product-form {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100vw;
+    z-index: 2;
+    background-color:rgba(243,243,243,0.5);
+  }
+  
+  .sticky-product-form--inactive {
+    visibility: hidden;
+    opacity: 0;
+    transition: visibility 1.15s ease-out, opacity 1.15s ease-out;
+  }
+  
+  .sticky-product-form--active {
+    visibility: visible;
+    opacity: 1;
+    transition: opacity 1.15s ease-out;
+  }
+  
+  .sticky-product-form form {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-evenly;
+    padding: 10px;
+  }
+  
+  .sticky-product-form__info {
+    font-size: clamp(0.75rem, 2vw, calc(var(--font-heading-scale) * 4rem));
+    line-height: 1;
+    text-align: right;
+    padding-right: 10px;
+  }
+  
+  .sticky-product-form .price {
+    margin-top: -5px;
+  }
+  
+  .sticky-product-form__buttons {
+    width: 100%;
+    max-width: 438px;
+    height: 47px;
+    padding-left: 10px;
+  }
+
+  .sticky-product-form__info,
+  .sticky-product-form__variants,
+  .sticky-product-form__quantity {
+    display: none;
+  }
+  
+  @media screen and (min-width: 990px) {
+    .sticky-product-form__info,
+    .sticky-product-form__variants,
+    .sticky-product-form__quantity {
+      height: 47px;
+      display: block;
+    }
+  }
+  
+  .quick-add-modal .sticky-product-form {
+    display: none;
+  }
+</style>
+
+{%- assign sticky_product_form_id = 'product-form-' | append: section.id -%}
+
+<sticky-product-form class="sticky-product-form sticky-product-form--inactive">
+  <product-form>
+    
+  {%- form 'product', product, id: sticky_product_form_id, class: 'form', novalidate: 'novalidate', data-type: 'add-to-cart-form' -%}
+  
+    <div class="sticky-product-form__info">
+      <input
+          type="hidden"
+          name="id"
+          value="{{ product.selected_or_first_available_variant.id }}"
+          disabled
+        >
+      <span class="h2">{{ product.title | escape }}</span>
+      <div class="no-js-hidden" id="price-{{ section.id }}" role="status" {{ block.shopify_attributes }}>
+          {%- render 'price', product: product, use_variant: true, show_badges: true, price_class: 'price--end' -%}
+      </div>
+    </div>
+    <div class="sticky-product-form__quantity product-form__quantity{% if settings.inputs_shadow_vertical_offset != 0 and settings.inputs_shadow_vertical_offset < 0 %} product-form__quantity-top{% endif %}">
+      <quantity-input class="quantity">
+          <button class="quantity__button no-js-hidden" name="minus" type="button">
+          <span class="visually-hidden">
+              {{- 'products.product.quantity.decrease' | t: product: product.title | escape -}}
+          </span>
+          {% render 'icon-minus' %}
+          </button>
+          <input
+          class="quantity__input"
+          type="number"
+          name="quantity"
+          id="Quantity-{{ section.id }}"
+          min="1"
+          value="1"
+          >
+          <button class="quantity__button no-js-hidden" name="plus" type="button">
+          <span class="visually-hidden">
+              {{- 'products.product.quantity.increase' | t: product: product.title | escape -}}
+          </span>
+          {% render 'icon-plus' %}
+          </button>
+      </quantity-input>
+    </div>
+    {%- unless product.has_only_default_variant -%}
+      <div class="sticky-product-form__variants">
+        
+        {% render 'product-variant-picker', 
+          product: product, 
+          block: block, 
+          product_form_id: sticky_product_form_id 
+        %}
+        
+      </div>    
+    {% endunless %}
+      <div class="sticky-product-form__buttons">
+
+        {%- render 'buy-buttons',
+          block: block,
+          product: product,
+          product_form_id: sticky_product_form_id,
+          section_id: section.id,
+          show_pickup_availability: false
+        -%}
+      </div>
+
+    {%- endform -%}
+  </product-form>
+</sticky-product-form>
+```
