@@ -69,7 +69,7 @@ Add to product-card.liquid from line 81
 {%- endif -%}
 ```
 
-Add to Global.js
+Add JS to Global.js
 ```
 class RolloverVideo extends HTMLElement {
   connectedCallback() {
@@ -97,7 +97,7 @@ class RolloverVideo extends HTMLElement {
 customElements.define('rollover-video', RolloverVideo);
 ```
 
-Add css
+Add CSS to the bottom of component-card.css
 ```
   .media.media--hover-effect > img + rollover-video video {
     opacity: 0;
