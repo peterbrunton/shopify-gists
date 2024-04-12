@@ -1,0 +1,22 @@
+When you are launching a new product or holding a sale, you may want to preview a new product that you are releasing on a new theme to make sure that it looks the way you want it to.
+
+To preview a product in an unpublished theme, you need to get the theme preview URL and the product preview URL. Combine these URLs to create a preview of your unpublished product in your unpublished theme.
+
+Step 1: Get the theme preview URL
+From your Shopify admin, go to Online store > Themes.
+On the theme you want to preview the product in, click on Actions, then Preview.
+Click on Share preview. Your theme preview URL will look like this https://********.shopifypreview.com.
+Click on Copy link.
+Open a new browser tab and then paste the theme preview URL into the address bar. Press the enter key  to navigate to the theme preview.
+ 
+
+Step 2: Get the product preview url
+From your Shopify admin, go to Products.
+Navigate to the product you want to preview.
+Click on Preview to view the product in your currently published theme. You'll see a product preview page with a URL that looks like this ********.shopifypreview.com/products_preview?preview_key=********.
+Copy the part of the URL starting at /products_preview. The part you copy will look like /products_preview?preview_key=********.
+Navigate to the theme preview tab that you opened in part 1.
+Append the product preview URL to the theme preview URL. Your final URL will look like this https://********.shopifypreview.com/products_preview?preview_key=********.
+ 
+
+You can view your unpublished product on your unpublished theme using the URL you created by combining the theme preview and product preview URLs.
